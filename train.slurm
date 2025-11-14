@@ -26,23 +26,19 @@ ISAACLAB_DIR="/scratch/$USER/IsaacLab"
 
 # Ensure local project exists and mirrors remote (first time creates it)
 mkdir -p "${LOCAL_PROJECT}"
-flock -w 120 "${LOCAL_PROJECT}.lock" \
-  rsync -az --delete --mkpath -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-    --rsync-path='flock -w 120 /tmp/rob6323_project.src.lock rsync' \
+rsync -az --delete --mkpath -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
     "${REMOTE_HOST}:${REMOTE_PROJECT}/" \
     "${LOCAL_PROJECT}/"
 
 mkdir -p "${ISAACLAB_DIR}"
-flock -w 120 "${ISAACLAB_DIR}.lock" \
-  rsync -az --delete --mkpath -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-    --rsync-path='flock -w 120 /tmp/rob6323_project_isaac_lab_dir.src.lock rsync' \
+rsync -az --delete --mkpath -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
     "${REMOTE_HOST}:${ISAACLAB_DIR}/" \
     "${ISAACLAB_DIR}/"
 
 # -------------------------------
 # Hardcode your cluster paths
 # -------------------------------
-SIF_IMAGE="/scratch/ja5009/public/isaac-lab-base.sif"
+SIF_IMAGE="/scratch/$USER/isaac-lab-base.sif"
 RUN_DIR="${LOCAL_PROJECT}"                       # run inside the mirrored project
 PERSISTENT_CACHE_DIR="/scratch/$USER/docker-isaac-sim"
 PERSISTENT_LOGS_DIR="/scratch/$USER/isaaclab/logs/${SLURM_JOB_ID}"
@@ -124,6 +120,5 @@ LATEST_DIR="${LATEST_DIR%/}"
 
 # Push logs back with a remote lock to avoid concurrent rsync races
 rsync -az --delete -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null" \
-  --rsync-path='flock -w 120 /tmp/logs.sync.lock rsync' \
   "${PERSISTENT_LOGS_DIR}/" \
   "${REMOTE_HOST}:${REMOTE_PROJECT}/logs/${SLURM_JOB_ID}/"
