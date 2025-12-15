@@ -30,10 +30,10 @@ class Rob6323Go2EnvCfg(DirectRLEnvCfg):
     state_space = 0
     debug_vis = True
 
-    # PD control gains
-    Kp = 20.0  # Proportional gain
-    Kd = 0.5   # Derivative gain
-    torque_limits = 100.0  # Max torque
+    Kp: float = 20.0
+    Kd: float = 0.5
+    torque_limits: float = 100.0
+
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
