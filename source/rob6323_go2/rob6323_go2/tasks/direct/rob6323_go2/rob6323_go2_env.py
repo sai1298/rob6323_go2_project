@@ -50,8 +50,11 @@ class Rob6323Go2Env(DirectRLEnv):
                     "lin_vel_z",
                     "dof_vel",
                     "ang_vel_xy",
+                    "feet_clearance",
+                    "tracking_contacts_shaped_force",
                 ]
             }
+
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base")
         # self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
@@ -76,6 +79,11 @@ class Rob6323Go2Env(DirectRLEnv):
         for name in foot_names:
             id_list, _ = self.robot.find_bodies(name)
             self._feet_ids.append(id_list[0])
+
+        self._feet_ids_sensor = []
+        for name in foot_names:
+            id_list, _ = self._contact_sensor.find_bodies(name)
+            self._feet_ids_sensor.append(id_list[0])
 
         # Variables needed for the raibert heuristic
         self.gait_indices = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
@@ -185,6 +193,11 @@ class Rob6323Go2Env(DirectRLEnv):
         # root_ang_vel_b: (num_envs, 3)
         rew_ang_vel_xy = torch.sum(torch.square(self.robot.data.root_ang_vel_b[:, 0:2]), dim=1)
 
+
+        rew_feet_clearance = self._reward_feet_clearance()
+        rew_tracking_contacts_shaped_force = self._reward_tracking_contacts_shaped_force()
+
+
         rewards = {
             "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale, # Removed step_dt
             "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale, # Removed step_dt
@@ -194,6 +207,10 @@ class Rob6323Go2Env(DirectRLEnv):
             "lin_vel_z": rew_lin_vel_z * self.cfg.lin_vel_z_reward_scale,
             "dof_vel": rew_dof_vel * self.cfg.dof_vel_reward_scale,
             "ang_vel_xy": rew_ang_vel_xy * self.cfg.ang_vel_xy_reward_scale,
+            "feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale,
+            "tracking_contacts_shaped_force": (
+                rew_tracking_contacts_shaped_force * self.cfg.tracking_contacts_shaped_force_reward_scale
+                ),
 
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
@@ -403,5 +420,64 @@ class Rob6323Go2Env(DirectRLEnv):
         reward = torch.sum(torch.square(err_raibert_heuristic), dim=(1, 2))
 
         return reward
-        
+    
+
+    def _reward_feet_clearance(self) -> torch.Tensor:
+        """
+        Penalize feet that fail to lift during swing.
+
+        Uses:
+        - self.foot_positions_w (robot body indexing via self._feet_ids)
+        - self.desired_contact_states (1=stance, 0=swing; already smoothed)
+        - self.foot_indices (already computed, but not strictly needed here)
+        """
+        # (num_envs, 4, 3)
+        foot_pos_w = self.foot_positions_w
+        foot_z = foot_pos_w[:, :, 2]  # (num_envs, 4)
+
+        # swing mask: 1 in swing, 0 in stance (smooth)
+        swing = 1.0 - self.desired_contact_states  # (num_envs, 4)
+
+        # target clearance (meters) - tune if needed
+        target_clearance = 0.08
+
+        # penalty when swing foot is below target
+        # relu(target - z) is >0 only if foot is too low
+        low_amount = torch.clamp(target_clearance - foot_z, min=0.0)
+
+        # weight by swing (so stance feet don't get punished for being on the ground)
+        per_foot_pen = swing * (low_amount ** 2)
+
+        # sum feet -> (num_envs,)
+        return torch.sum(per_foot_pen, dim=1)
+
+
+    def _reward_tracking_contacts_shaped_force(self) -> torch.Tensor:
+        """
+        Encourage contact force when stance is desired, and low force when swing is desired.
+
+        Uses:
+        - self._contact_sensor.data.net_forces_w (sensor indexing!)
+        - self._feet_ids_sensor (indices inside the contact sensor)
+        - self.desired_contact_states (smooth desired stance probability)
+        """
+        # net_forces_w is (num_envs, num_bodies_tracked, 3)
+        net_forces_w = self._contact_sensor.data.net_forces_w
+
+        # (num_envs, 4, 3) for the 4 feet, indexed by SENSOR body ids
+        foot_forces_w = net_forces_w[:, self._feet_ids_sensor, :]
+
+        # force magnitude per foot: (num_envs, 4)
+        foot_force_mag = torch.linalg.norm(foot_forces_w, dim=-1)
+
+        # normalize to [0, 1]-ish smoothly so scales are stable
+        # (tune 50.0 depending on typical GRF magnitudes you see)
+        force_signal = torch.tanh(foot_force_mag / 50.0)
+
+        # desired_contact_states is ~1 in stance, ~0 in swing (smooth)
+        desired = self.desired_contact_states
+
+        # mismatch penalty (squared error), summed over feet -> (num_envs,)
+        return torch.sum((force_signal - desired) ** 2, dim=1)
+
 
