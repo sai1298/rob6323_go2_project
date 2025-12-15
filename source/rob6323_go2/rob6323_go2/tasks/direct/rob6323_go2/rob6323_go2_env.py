@@ -40,14 +40,18 @@ class Rob6323Go2Env(DirectRLEnv):
 
         # Logging
         self._episode_sums = {
-            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-            for key in [
-                "track_lin_vel_xy_exp",
-                "track_ang_vel_z_exp",
-                "rew_action_rate",     
-                "raibert_heuristic"
-            ]
-        }
+                key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+                for key in [
+                    "track_lin_vel_xy_exp",
+                    "track_ang_vel_z_exp",
+                    "rew_action_rate",
+                    "raibert_heuristic",
+                    "orient",
+                    "lin_vel_z",
+                    "dof_vel",
+                    "ang_vel_xy",
+                ]
+            }
         # Get specific body indices
         self._base_id, _ = self._contact_sensor.find_bodies("base")
         # self._feet_ids, _ = self._contact_sensor.find_bodies(".*foot")
