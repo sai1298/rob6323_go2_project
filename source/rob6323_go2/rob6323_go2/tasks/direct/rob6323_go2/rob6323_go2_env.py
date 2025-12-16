@@ -91,9 +91,6 @@ class Rob6323Go2Env(DirectRLEnv):
         self.desired_contact_states = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
 
 
-
-
-
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
         self._contact_sensor = ContactSensor(self.cfg.contact_sensor)
@@ -210,7 +207,7 @@ class Rob6323Go2Env(DirectRLEnv):
             "feet_clearance": rew_feet_clearance * self.cfg.feet_clearance_reward_scale,
             "tracking_contacts_shaped_force": (
                 rew_tracking_contacts_shaped_force * self.cfg.tracking_contacts_shaped_force_reward_scale
-                ),
+            ),
 
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
