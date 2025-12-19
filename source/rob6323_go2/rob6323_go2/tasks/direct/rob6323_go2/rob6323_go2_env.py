@@ -78,27 +78,9 @@ class Rob6323Go2Env(DirectRLEnv):
         self.torque_limits = self.cfg.torque_limits
         self.desired_joint_pos = torch.zeros(self.num_envs, 12, device=self.device)
         self._applied_torques = torch.zeros(self.num_envs, 12, device=self.device)
-
-        # --------------------------------------------------------
-        # Indices for Body and Sensors (Part 4 & 6)
-        # --------------------------------------------------------
         self._feet_ids = []  # For kinematics (Part 4)
-        # self._feet_ids_sensor = [0, 1, 2, 3]  # Fixed indices for the restricted sensor
         self._foot_names = ["FL_foot", "FR_foot", "RL_foot", "RR_foot"]
         self._base_id = None
-
-        # try:
-        #     base_ids, _ = self._contact_sensor.find_bodies("base")
-        #     if len(base_ids) > 0:
-        #         self._base_id = base_ids[0]
-
-        #     for name in self._foot_names:
-        #         # Part 4: Robot indices (for position lookups on the Articulation)
-        #         ids, _ = self.robot.find_bodies(name)
-        #         self._feet_ids.append(ids[0])
-        # except Exception:
-        #     pass
-
         # Gait variables
         self.gait_indices = torch.zeros(
             self.num_envs, dtype=torch.float, device=self.device, requires_grad=False
@@ -424,7 +406,6 @@ class Rob6323Go2Env(DirectRLEnv):
         return torch.sum(penalty, dim=1)
 
     def _reward_tracking_contacts_shaped_force(self):
-        # With the restricted contact sensor, self._feet_ids_sensor is just [0,1,2,3]
         # net_forces_w is (num_envs, 4, 3)
         foot_forces = self._contact_sensor.data.net_forces_w
         foot_forces_norm = torch.norm(foot_forces, dim=-1)  # (num_envs, 4)
